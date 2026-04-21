@@ -222,5 +222,51 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
         return -1;
     }
     fclose(fp);
+
+    // Verify hash
+    ObjectID computed;
+    compute_hash(buffer, size, &computed);
+
+    if (memcmp(&computed, id, sizeof(ObjectID)) != 0) {
+        free(buffer);
+        return -1;
+    }
+
+    // Find header separator '\0'
+    char *data_start = memchr(buffer, '\0', size);
+    if (!data_start) {
+        free(buffer);
+        return -1;
+    }
+
+    size_t header_len = data_start - buffer + 1;
+    char type_str[10];
+    size_t data_len;
+//
+    // Parse header
+    sscanf(buffer, "%s %zu", type_str, &data_len);
+
+    // Determine type
+    if (strcmp(type_str, "blob") == 0) *type_out = OBJ_BLOB;
+    else if (strcmp(type_str, "tree") == 0) *type_out = OBJ_TREE;
+    else if (strcmp(type_str, "commit") == 0) *type_out = OBJ_COMMIT;
+    else {
+        free(buffer);
+        return -1;
+    }
+//
+    // Allocate and copy data
+    void *data = malloc(data_len);
+    if (!data) {
+        free(buffer);
+        return -1;
+    }
+//.
+    memcpy(data, buffer + header_len, data_len);
+
+    *data_out = data;
+    *len_out = data_len;
+
+    free(buffer);
     return 0;
 }
