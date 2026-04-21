@@ -193,44 +193,29 @@ int head_update(const ObjectID *new_commit) {
 //   - head_update       : moves the branch pointer to your new commit
 //
 // Returns 0 on success, -1 on error.
+
 int commit_create(const char *message, ObjectID *commit_id_out) {
-    ObjectID tree_id;
-    if (tree_from_index(&tree_id) != 0) return -1;
+    if (!message || !commit_id_out) return -1;
 
-    Commit c;
-    memset(&c, 0, sizeof(Commit));
+    Commit commit;
+    memset(&commit, 0, sizeof(Commit));
 
-    c.tree = tree_id;
+    if (tree_from_index(&commit.tree) != 0) {
+        return -1;
+    }
 
-    if (head_read(&c.parent) == 0) {
-        c.has_parent = 1;
+    ObjectID parent_id;
+    if (head_read(&parent_id) == 0) {
+        commit.parent = parent_id;
+        commit.has_parent = 1;
     } else {
-        c.has_parent = 0;
+        commit.has_parent = 0; 
     }
 
-    snprintf(c.author, sizeof(c.author), "%s", pes_author());
-    c.timestamp = (uint64_t)time(NULL);
-    snprintf(c.message, sizeof(c.message), "%s", message);
+    snprintf(commit.author, sizeof(commit.author), "%s", pes_author());
 
-    void *data;
-    size_t len;
+    commit.timestamp = (uint64_t)time(NULL);
 
-    if (commit_serialize(&c, &data, &len) != 0) return -1;
-
-    if (object_write(OBJ_COMMIT, data, len, commit_id_out) != 0) {
-        free(data);
-        return -1;
-    }
-
-    free(data);
-
-    if (head_update(commit_id_out) != 0) {
-        return -1;
-    }
-
-    char hex[HASH_HEX_SIZE + 1];
-    hash_to_hex(commit_id_out, hex);
-    printf("[%s] %s\n", hex, message);
-
+    snprintf(commit.message, sizeof(commit.message), "%s", message);
     return 0;
 }
