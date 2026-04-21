@@ -144,7 +144,7 @@ int index_load(Index *index) {
 
     FILE *fp = fopen(".pes/index", "r");
     if (!fp) {
-        return 0;
+        return 0; 
     }
 
     char mode_str[16], hash_hex[65], path[256];
@@ -230,36 +230,50 @@ int index_save(const Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_add(Index *index, const char *path) {
-    FILE *f = fopen(path, "rb");
-    if (!f) return -1;
-
-    fseek(f, 0, SEEK_END);
-    size_t size = ftell(f);
-    rewind(f);
-
-    void *buf = malloc(size ? size : 1);
-    if (!buf) {
-        fclose(f);
-        return -1;
-    }
-
-    fread(buf, 1, size, f);
-    fclose(f);
-
-    ObjectID id;
-    if (object_write(OBJ_BLOB, buf, size, &id) != 0) {
-        free(buf);
-        return -1;
-    }
-
-    free(buf);
+    if (!index || !path) return -1;
 
     struct stat st;
-    if (stat(path, &st) != 0) return -1;
+    if (stat(path, &st) != 0) {
+        fprintf(stderr, "error: cannot access '%s'\n", path);
+        return -1;
+    }
+
+    FILE *fp = fopen(path, "rb");
+    if (!fp) return -1;
+
+    size_t size = st.st_size;
+    void *buffer = NULL;
+
+    if (size > 0) {
+        buffer = malloc(size);
+        if (!buffer) {
+            fclose(fp);
+            return -1;
+        }
+
+        size_t read_bytes = fread(buffer, 1, size, fp);
+        if (read_bytes != size) {
+            fclose(fp);
+            free(buffer);
+            return -1;
+        }
+    }
+
+    fclose(fp);
+
+    ObjectID id;
+    if (object_write(OBJ_BLOB, buffer, size, &id) != 0) {
+        if (buffer) free(buffer);
+        return -1;
+    }
+
+    if (buffer) free(buffer);
 
     IndexEntry *e = index_find(index, path);
+
     if (!e) {
         if (index->count >= MAX_INDEX_ENTRIES) {
+            fprintf(stderr, "error: index full\n");
             return -1;
         }
         e = &index->entries[index->count++];
@@ -269,8 +283,8 @@ int index_add(Index *index, const char *path) {
     e->hash = id;
     e->mtime_sec = st.st_mtime;
     e->size = st.st_size;
-    strncpy(e->path, path, sizeof(e->path) - 1);
-    e->path[sizeof(e->path) - 1] = '\0';
+    strcpy(e->path, path);
+
 
     return index_save(index);
 }
