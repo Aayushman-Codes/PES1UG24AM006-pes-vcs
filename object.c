@@ -196,72 +196,31 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
     char path[512];
     object_path(id, path, sizeof(path));
 
-    FILE *f = fopen(path, "rb");
-    if (!f) return -1;
+    FILE *fp = fopen(path, "rb");
+    if (!fp) return -1;
 
-    fseek(f, 0, SEEK_END);
-    long file_size = ftell(f);
-    rewind(f);
+    // Get file size
+    fseek(fp, 0, SEEK_END);
+    long size = ftell(fp);
+    rewind(fp);
 
-    if (file_size <= 0) {
-        fclose(f);
+    if (size <= 0) {
+        fclose(fp);
         return -1;
     }
 
-    unsigned char *buf = malloc(file_size);
-    if (!buf) {
-        fclose(f);
+    // Read file
+    char *buffer = malloc(size);
+    if (!buffer) {
+        fclose(fp);
         return -1;
     }
 
-    if (fread(buf, 1, file_size, f) != (size_t)file_size) {
-        free(buf);
-        fclose(f);
+    if (fread(buffer, 1, size, fp) != (size_t)size) {
+        fclose(fp);
+        free(buffer);
         return -1;
     }
-    fclose(f);
-
-    ObjectID computed;
-    compute_hash(buf, file_size, &computed);
-    if (memcmp(&computed, id, sizeof(ObjectID)) != 0) {
-        free(buf);
-        return -1;
-    }
-
-    void *nul = memchr(buf, '\0', file_size);
-    if (!nul) {
-        free(buf);
-        return -1;
-    }
-
-    size_t header_len = (unsigned char *)nul - buf;
-    char *header = (char *)buf;
-
-    char type_str[16];
-    size_t size;
-
-    if (sscanf(header, "%15s %zu", type_str, &size) != 2) {
-        free(buf);
-        return -1;
-    }
-
-    ObjectType type;
-    if (strcmp(type_str, "blob") == 0) {
-        type = OBJ_BLOB;
-    } else if (strcmp(type_str, "tree") == 0) {
-        type = OBJ_TREE;
-    } else if (strcmp(type_str, "commit") == 0) {
-        type = OBJ_COMMIT;
-    } else {
-        free(buf);
-        return -1;
-    }
-
-    unsigned char *data_start = (unsigned char *)nul + 1;
-    size_t data_len = file_size - (header_len + 1);
-
-    if (data_len != size) {
-        free(buf);
-        return -1;
-    }
+    fclose(fp);
+    return 0;
 }
