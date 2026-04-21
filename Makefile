@@ -15,9 +15,11 @@ pes: $(OBJS)
 
 # ─── Test binaries ───────────────────────────────────────────────────────────
 
-test_objects: test_objects.o object.o 
+# test_objects only needs object.c
+test_objects: test_objects.o object.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
+# test_tree needs object + tree + index (tree_from_index calls index_load)
 test_tree: test_tree.o object.o tree.o index.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
